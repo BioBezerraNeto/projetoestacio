@@ -1,0 +1,242 @@
+1. Configuração do banco de dados(/src/services/database.js)
+
+import SQLite from 'react-native-sqlite-storage';
+
+const db = SQLite.openDatabase(
+  { name: 'moto_rental.db', location: 'default' },
+  () => console.log('Database opened'),
+  error => console.error('Error: ', error)
+);
+
+// Inicialização do banco
+export const initializeDatabase = () => {
+  db.transaction(tx => {
+    tx.executeSql(
+      `CREATE TABLE IF NOT EXISTS Rentals (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          motoName TEXT,
+          rentalDate TEXT,
+          returnDate TEXT
+      );`
+    );
+    tx.executeSql(
+      `CREATE TABLE IF NOT EXISTS Maintenance (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          motoName TEXT,
+          maintenanceDate TEXT
+      );`
+    );
+  });
+};
+
+export const addRental = (motoName, rentalDate, returnDate) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      'INSERT INTO Rentals (motoName, rentalDate, returnDate) VALUES (?, ?, ?)',
+      [motoName, rentalDate, returnDate]
+    );
+  });
+};
+
+export const getRentals = callback => {
+  db.transaction(tx => {
+    tx.executeSql('SELECT * FROM Rentals', [], (tx, results) => {
+      let rentals = [];
+      for (let i = 0; i < results.rows.length; i++) {
+        rentals.push(results.rows.item(i));
+      }
+      callback(rentals);
+    });
+  });
+};
+
+export const addMaintenance = (motoName, maintenanceDate) => {
+  db.transaction(tx => {
+    tx.executeSql(
+      'INSERT INTO Maintenance (motoName, maintenanceDate) VALUES (?, ?)',
+      [motoName, maintenanceDate]
+    );
+  });
+};
+
+export default db;
+
+2. Tela inicial (/src/screens/HomeScreen.js)
+
+import React, { useEffect, useState } from 'react';
+import { View, Text, Button, FlatList, StyleSheet } from 'react-native';
+import { getRentals, initializeDatabase } from '../services/database';
+
+const HomeScreen = ({ navigation }) => {
+  const [rentals, setRentals] = useState([]);
+
+  useEffect(() => {
+    initializeDatabase();
+    fetchRentals();
+  }, []);
+
+  const fetchRentals = () => {
+    getRentals(data => setRentals(data));
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Lista de Locações</Text>
+      <FlatList
+        data={rentals}
+        keyExtractor={item => item.id.toString()}
+        renderItem={({ item }) => (
+          <Text>{${item.motoName} - ${item.rentalDate} até ${item.returnDate}}</Text>
+        )}
+      />
+      <Button title="Adicionar Locação" onPress={() => navigation.navigate('AddRental')} />
+      <Button title="Manutenções" onPress={() => navigation.navigate('MaintenanceScreen')} />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+});
+
+export default HomeScreen;
+
+3. Tela para adicionar locação  (/src/screens/AddRental.js)
+
+import React, { useState } from 'react';
+import { View, Text, TextInput, Button, StyleSheet } from 'react-native';
+import { addRental } from '../services/database';
+
+const AddRental = ({ navigation }) => {
+  const [motoName, setMotoName] = useState('');
+  const [rentalDate, setRentalDate] = useState('');
+  const [returnDate, setReturnDate] = useState('');
+
+  const handleAddRental = () => {
+    addRental(motoName, rentalDate, returnDate);
+    navigation.goBack();
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Nova Locação</Text>
+      <TextInput
+        placeholder="Nome da Moto"
+        style={styles.input}
+        value={motoName}
+        onChangeText={setMotoName}
+      />
+      <TextInput
+        placeholder="Data de Locação"
+        style={styles.input}
+        value={rentalDate}
+        onChangeText={setRentalDate}
+      />
+      <TextInput
+        placeholder="Data de Retorno"
+        style={styles.input}
+        value={returnDate}
+        onChangeText={setReturnDate}
+      />
+      <Button title="Salvar" onPress={handleAddRental} />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  input: { borderWidth: 1, marginBottom: 10, padding: 10, borderRadius: 5 },
+});
+
+export default AddRental;
+
+4. Tela de manutenção  (/src/screens/MaintenanceScreen.js)
+
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, Button, FlatList, StyleSheet } from 'react-native';
+import { addMaintenance, initializeDatabase, getRentals } from '../services/database';
+
+const MaintenanceScreen = ({ navigation }) => {
+  const [motoName, setMotoName] = useState('');
+  const [maintenanceDate, setMaintenanceDate] = useState('');
+  const [rentals, setRentals] = useState([]);
+
+  useEffect(() => {
+    initializeDatabase();
+    fetchRentals();
+  }, []);
+
+  const fetchRentals = () => {
+    getRentals(data => setRentals(data));
+  };
+
+  const handleAddMaintenance = () => {
+    addMaintenance(motoName, maintenanceDate);
+    alert('Manutenção adicionada com sucesso!');
+    setMotoName('');
+    setMaintenanceDate('');
+  };
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Gerenciar Manutenções</Text>
+      <FlatList
+        data={rentals}
+        keyExtractor={item => item.id.toString()}
+        renderItem={({ item }) => (
+          <Text style={styles.listItem}>{Moto: ${item.motoName} | Locação: ${item.rentalDate} - ${item.returnDate}}</Text>
+        )}
+      />
+      <TextInput
+        placeholder="Nome da Moto"
+        style={styles.input}
+        value={motoName}
+        onChangeText={setMotoName}
+      />
+      <TextInput
+        placeholder="Data da Manutenção"
+        style={styles.input}
+        value={maintenanceDate}
+        onChangeText={setMaintenanceDate}
+      />
+      <Button title="Adicionar Manutenção" onPress={handleAddMaintenance} />
+      <Button title="Voltar" onPress={() => navigation.goBack()} />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, padding: 20 },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 20 },
+  input: { borderWidth: 1, marginBottom: 10, padding: 10, borderRadius: 5 },
+  listItem: { marginBottom: 10, fontSize: 16 },
+});
+
+export default MaintenanceScreen;
+
+5. Navegação principal
+
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import HomeScreen from './src/screens/HomeScreen';
+import AddRental from './src/screens/AddRental';
+import MaintenanceScreen from './src/screens/MaintenanceScreen';
+
+const Stack = createStackNavigator();
+
+const App = () => {
+  return (
+    <NavigationContainer>
+      <Stack.Navigator initialRouteName="HomeScreen">
+        <Stack.Screen name="HomeScreen" component={HomeScreen} options={{ title: 'Locadora' }} />
+        <Stack.Screen name="AddRental" component={AddRental} options={{ title: 'Adicionar Locação' }} />
+        <Stack.Screen name="MaintenanceScreen" component={MaintenanceScreen} options={{ title: 'Manutenções' }} />
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+};
+
+export default App;
